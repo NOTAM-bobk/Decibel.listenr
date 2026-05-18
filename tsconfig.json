@@ -13,8 +13,11 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    
+    /* Module Interoperability (Fixes the default export error) */
+    "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "moduleDetection": "force",
+    "forceConsistentCasingInFileNames": true,
 
     /* Linting configuration */
     "strict": true,
@@ -25,3 +28,4 @@
   },
   "include": ["src"]
 }
+
