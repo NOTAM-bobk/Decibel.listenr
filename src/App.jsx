@@ -60,15 +60,25 @@ export default function App() {
     try {
       setPermissionError(null);
       
+      // Fix 1: Initialize AudioContext synchronously for iOS Safari strict policies
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioContext();
+      
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       streamRef.current = stream;
 
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // Fix 2: iOS forces audio contexts to start suspended. We must explicitly resume it.
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
+
       audioContextRef.current = audioCtx;
 
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 254; 
+      
+      // Fix 3: fftSize MUST be a power of 2 (changed from 254 to 256 to prevent API crash)
+      analyser.fftSize = 256; 
       analyser.smoothingTimeConstant = 0.4;
       source.connect(analyser);
       analyserRef.current = analyser;
@@ -108,13 +118,24 @@ export default function App() {
     if (!analyser) return;
 
     const bufferLength = analyser.fftSize;
-    const dataArray = new Float32Array(bufferLength);
-    analyser.getFloatTimeDomainData(dataArray);
-
     let sum = 0;
-    for (let i = 0; i < bufferLength; i++) {
-      sum += dataArray[i] * dataArray[i];
+
+    // Fix 4: Fallback for older iOS Safari versions that don't support getFloatTimeDomainData
+    if (analyser.getFloatTimeDomainData) {
+      const dataArray = new Float32Array(bufferLength);
+      analyser.getFloatTimeDomainData(dataArray);
+      for (let i = 0; i < bufferLength; i++) {
+        sum += dataArray[i] * dataArray[i];
+      }
+    } else {
+      const dataArray = new Uint8Array(bufferLength);
+      analyser.getByteTimeDomainData(dataArray);
+      for (let i = 0; i < bufferLength; i++) {
+        const floatVal = (dataArray[i] - 128) / 128;
+        sum += floatVal * floatVal;
+      }
     }
+    
     const rms = Math.sqrt(sum / bufferLength);
 
     let db = 30; 
